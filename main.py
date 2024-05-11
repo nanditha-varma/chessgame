@@ -169,7 +169,7 @@ def get_king_moves(board, row, col, is_white):
     moves = []
     king_moves = [
         (-1, -1), (-1, 0), (-1, 1),
-        (0, -1),         (0, 1),
+        (0, -1), (0, 1),
         (1, -1), (1, 0), (1, 1)
     ]
     enemy_color = 'b' if is_white else 'w'
@@ -207,13 +207,57 @@ def get_piece_moves(board, row, col):
         return []
 
 
-# Check if the move is legal
+def is_in_check(board, king_pos, player_turn):
+    enemy_color = 'b' if player_turn == 'w' else 'w'
+    for r in range(DIMENSION):
+        for c in range(DIMENSION):
+            if board[r][c] and board[r][c][0] == enemy_color:
+                if king_pos in get_piece_moves(board, r, c):
+                    return True
+    return False
+
+
 def is_legal_move(board, s_row, s_col, e_row, e_col, player_turn):
     piece = board[s_row][s_col]
     if piece[0] != player_turn:
         return False
     legal_moves = get_piece_moves(board, s_row, s_col)
-    return (e_row, e_col) in legal_moves
+    if (e_row, e_col) not in legal_moves:
+        return False
+
+    # Simulate the move and check for checks
+    temp_board = [row[:] for row in board]
+    temp_board[e_row][e_col] = temp_board[s_row][s_col]
+    temp_board[s_row][s_col] = None
+    king_pos = None
+    for r in range(DIMENSION):
+        for c in range(DIMENSION):
+            if temp_board[r][c] == player_turn + 'K':
+                king_pos = (r, c)
+    if king_pos and is_in_check(temp_board, king_pos, player_turn):
+        return False
+    return True
+
+
+def is_checkmate(board, player_turn):
+    king_pos = None
+    for r in range(DIMENSION):
+        for c in range(DIMENSION):
+            if board[r][c] == player_turn + 'K':
+                king_pos = (r, c)
+
+    if king_pos and not is_in_check(board, king_pos, player_turn):
+        return False
+
+    # Try all moves for all pieces
+    for r in range(DIMENSION):
+        for c in range(DIMENSION):
+            if board[r][c] and board[r][c][0] == player_turn:
+                legal_moves = get_piece_moves(board, r, c)
+                for move in legal_moves:
+                    if is_legal_move(board, r, c, move[0], move[1], player_turn):
+                        return False
+    return True
 
 
 # Main game loop
@@ -225,6 +269,7 @@ def main():
     running = True
     selected_piece = None
     player_turn = 'w'
+    game_over = False
 
     while running:
         for e in pygame.event.get():
@@ -232,7 +277,7 @@ def main():
                 running = False
                 pygame.quit()
                 sys.exit()
-            elif e.type == pygame.MOUSEBUTTONDOWN:
+            elif e.type == pygame.MOUSEBUTTONDOWN and not game_over:
                 location = pygame.mouse.get_pos()
                 row, col = convert_pos(location)
                 if selected_piece:
@@ -243,6 +288,10 @@ def main():
                         board[row][col] = board[s_row][s_col]
                         board[s_row][s_col] = None
                         player_turn = 'b' if player_turn == 'w' else 'w'
+                        # Check for checkmate
+                        if is_checkmate(board, player_turn):
+                            game_over = True
+                            print(f"Checkmate! {'White' if player_turn == 'b' else 'Black'} wins!")
                     selected_piece = None
                 else:
                     if board[row][col] and board[row][col][0] == player_turn:
@@ -250,9 +299,14 @@ def main():
 
         draw_board(screen)
         draw_pieces(screen, board, images)
+        if game_over:
+            font = pygame.font.SysFont("Helvetica", 32, True)
+            text = font.render("Checkmate!", True, pygame.Color("Red"))
+            screen.blit(text, (WIDTH / 2 - text.get_width() / 2, HEIGHT / 2 - text.get_height() / 2))
         pygame.display.flip()
         clock.tick(MAX_FPS)
 
 
 if __name__ == "__main__":
     main()
+
